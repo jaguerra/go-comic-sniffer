@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/ericchiang/css"
 	"golang.org/x/net/html"
@@ -30,13 +31,38 @@ func defaultHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
-func snifferHandler(w http.ResponseWriter, r *http.Request) {
-
+func asyncGetImage(images chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	log.Print("Fetch image requested")
 	imageTag, err := getImageFromRemote()
 	if err != nil {
-		errorResponse(&w, err)
+		log.Fatal("Failed to fetch an image")
+		log.Fatal(err)
 		return
 	}
+	log.Print("Fetched image")
+	images <- imageTag
+}
+
+func snifferHandler(w http.ResponseWriter, r *http.Request) {
+
+	images := make(chan string, 5)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go asyncGetImage(images, &wg)
+	}
+	wg.Wait()
+	close(images)
+
+	imageTag := ""
+
+	for image := range images {
+		imageTag += image
+	}
+
+	log.Print(imageTag)
 
 	t, err := template.ParseFiles("random.html")
 	if err != nil {
