@@ -17,10 +17,12 @@ import (
 	"golang.org/x/net/html"
 )
 
+// Sniffer struct
 type Sniffer struct {
 	httpClient *circuit.HTTPClient
 }
 
+// NewSniffer creates and initialises new Sniffer
 func NewSniffer() *Sniffer {
 	return &Sniffer{
 		httpClient: circuit.NewHTTPClient(time.Second*5, 10, nil),
@@ -28,7 +30,7 @@ func NewSniffer() *Sniffer {
 }
 
 // Handler for the sniffer HTTP action
-func (s *Sniffer) Handler(w http.ResponseWriter, r *http.Request) {
+func (s *Sniffer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 	numImages, err := strconv.Atoi(query.Get("numImages"))
