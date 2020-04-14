@@ -17,6 +17,7 @@ func main() {
 	}
 	log.Print("Starting server on port " + port + " ...")
 	http.HandleFunc("/", defaultHandler)
+	sniffer := sniffer.NewSniffer()
 	http.HandleFunc("/random", sniffer.Handler)
 
 	log.Fatal(http.ListenAndServe(":"+port, nil))

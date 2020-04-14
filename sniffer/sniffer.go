@@ -10,13 +10,25 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/ericchiang/css"
+	circuit "github.com/rubyist/circuitbreaker"
 	"golang.org/x/net/html"
 )
 
+type Sniffer struct {
+	httpClient *circuit.HTTPClient
+}
+
+func NewSniffer() *Sniffer {
+	return &Sniffer{
+		httpClient: circuit.NewHTTPClient(time.Second*5, 10, nil),
+	}
+}
+
 // Handler for the sniffer HTTP action
-func Handler(w http.ResponseWriter, r *http.Request) {
+func (s *Sniffer) Handler(w http.ResponseWriter, r *http.Request) {
 
 	query := r.URL.Query()
 	numImages, err := strconv.Atoi(query.Get("numImages"))
@@ -35,7 +47,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	for i := 0; i < numImages; i++ {
 		wg.Add(1)
-		go asyncGetImage(images, &wg)
+		go s.asyncGetImage(images, &wg)
 	}
 	wg.Wait()
 	close(images)
@@ -61,10 +73,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func asyncGetImage(images chan string, wg *sync.WaitGroup) {
+func (s *Sniffer) asyncGetImage(images chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Print("Fetch image requested")
-	imageTag, err := getImageFromRemote()
+	imageTag, err := s.getImageFromRemote()
 	if err != nil {
 		log.Fatal("Failed to fetch an image")
 		log.Fatal(err)
@@ -74,7 +86,7 @@ func asyncGetImage(images chan string, wg *sync.WaitGroup) {
 	images <- imageTag
 }
 
-func getImageFromRemote() (imageTag string, reason error) {
+func (s *Sniffer) getImageFromRemote() (imageTag string, reason error) {
 	req, err := http.NewRequest("GET", os.Getenv("URL"), nil)
 	if err != nil {
 		return "", err
@@ -86,16 +98,16 @@ func getImageFromRemote() (imageTag string, reason error) {
 	}
 	req.AddCookie(&ageCookie)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-	return sniffImage(body)
+	return s.sniffImage(body)
 }
 
-func sniffImage(body []byte) (string, error) {
+func (s *Sniffer) sniffImage(body []byte) (string, error) {
 	sel, err := css.Compile(".comic-display img.img-responsive")
 	if err != nil {
 		return "", err
