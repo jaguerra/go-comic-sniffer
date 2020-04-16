@@ -29,6 +29,11 @@ func NewSniffer() *Sniffer {
 	}
 }
 
+type imageState struct {
+	imgTag string
+	ok     bool
+}
+
 // Handler for the sniffer HTTP action
 func (s *Sniffer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
@@ -44,7 +49,7 @@ func (s *Sniffer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		numImages = 5
 	}
 
-	images := make(chan string)
+	images := make(chan *imageState)
 	var wg sync.WaitGroup
 
 	for i := 0; i < numImages; i++ {
@@ -55,8 +60,11 @@ func (s *Sniffer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	imageTag := ""
 
 	go func() {
-		for {
-			imageTag += <-images
+		for image := range images {
+			if image.ok {
+				imageTag += image.imgTag
+			}
+			wg.Done()
 		}
 	}()
 
@@ -77,17 +85,17 @@ func (s *Sniffer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Sniffer) asyncGetImage(images chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (s *Sniffer) asyncGetImage(images chan *imageState, wg *sync.WaitGroup) {
 	log.Print("Fetch image requested")
 	imageTag, err := s.getImageFromRemote()
 	if err != nil {
 		log.Fatal("Failed to fetch an image")
 		log.Fatal(err)
+		images <- &imageState{ok: false}
 		return
 	}
 	log.Print("Fetched image")
-	images <- imageTag
+	images <- &imageState{imgTag: imageTag, ok: true}
 }
 
 func (s *Sniffer) getImageFromRemote() (imageTag string, reason error) {
