@@ -44,21 +44,23 @@ func (s *Sniffer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		numImages = 5
 	}
 
-	images := make(chan string, numImages)
+	images := make(chan string)
 	var wg sync.WaitGroup
 
 	for i := 0; i < numImages; i++ {
 		wg.Add(1)
 		go s.asyncGetImage(images, &wg)
 	}
-	wg.Wait()
-	close(images)
 
 	imageTag := ""
 
-	for image := range images {
-		imageTag += image
-	}
+	go func() {
+		for {
+			imageTag += <-images
+		}
+	}()
+
+	wg.Wait()
 
 	log.Print(imageTag)
 
